@@ -25,7 +25,7 @@ export async function POST({ request, getClientAddress }) {
 			imagePreviewBase64 = imageBase64.length > 500 ? imageBase64.substring(0, 300) + '...' : imageBase64;
 		}
 
-		// Log request and response locally
+		// Log request and response locally with token usage and cost metrics
 		logRizzRequest({
 			hasImage: Boolean(imageBase64),
 			imagePreviewBase64,
@@ -34,7 +34,8 @@ export async function POST({ request, getClientAddress }) {
 			suggestions: result.suggestions,
 			simulated: result.simulated,
 			durationMs: Date.now() - startTime,
-			clientIp
+			clientIp,
+			usage: result.usage
 		});
 
 		return json(result);

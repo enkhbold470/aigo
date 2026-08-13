@@ -290,11 +290,24 @@ export type PersonalizationConfig = {
 	flirtLevel?: number;
 };
 
+export type UsageStats = {
+	model: string;
+	promptTokens: number;
+	completionTokens: number;
+	totalTokens: number;
+	costUSD: number;
+};
+
 export async function generateRizz(
 	imageBase64: string | null,
 	context = '',
 	personalization?: PersonalizationConfig
-): Promise<{ suggestions: RizzSuggestion[]; options: string[]; simulated: boolean }> {
+): Promise<{
+	suggestions: RizzSuggestion[];
+	options: string[];
+	simulated: boolean;
+	usage?: UsageStats;
+}> {
 	const openai = client();
 	if (!openai) {
 		const items = localRizzItems();
@@ -380,8 +393,9 @@ OUTPUT REQUIREMENTS:
 		});
 	}
 
+	const targetModel = 'gpt-4o-mini';
 	const completion = await openai.chat.completions.create({
-		model: 'gpt-4o-mini',
+		model: targetModel,
 		messages: [
 			{ role: 'system', content: systemPrompt },
 			{ role: 'user', content: userContent }
@@ -408,10 +422,29 @@ OUTPUT REQUIREMENTS:
 		suggestions = localRizzItems();
 	}
 
+	// Calculate Usage & Cost based on current market rates ($0.15/1M input, $0.60/1M output for gpt-4o-mini)
+	const model = completion.model || targetModel;
+	const promptTokens = completion.usage?.prompt_tokens ?? 0;
+	const completionTokens = completion.usage?.completion_tokens ?? 0;
+	const totalTokens = completion.usage?.total_tokens ?? (promptTokens + completionTokens);
+
+	const isMini = model.includes('mini');
+	const inputRate = isMini ? 0.15 : 2.50; // $ per 1M tokens
+	const outputRate = isMini ? 0.60 : 10.00; // $ per 1M tokens
+
+	const costUSD = (promptTokens * (inputRate / 1_000_000)) + (completionTokens * (outputRate / 1_000_000));
+
 	return {
 		suggestions,
 		options: suggestions.map((s) => s.text),
-		simulated: false
+		simulated: false,
+		usage: {
+			model,
+			promptTokens,
+			completionTokens,
+			totalTokens,
+			costUSD
+		}
 	};
 }
 

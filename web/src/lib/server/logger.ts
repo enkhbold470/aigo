@@ -12,6 +12,28 @@ export type RizzLogRecord = {
 	simulated: boolean;
 	durationMs: number;
 	clientIp?: string;
+	usage?: {
+		model: string;
+		promptTokens: number;
+		completionTokens: number;
+		totalTokens: number;
+		costUSD: number;
+	};
+};
+
+export type AnalyticsSummary = {
+	totalGenerations: number;
+	totalImagesProcessed: number;
+	totalPromptTokens: number;
+	totalCompletionTokens: number;
+	totalTokens: number;
+	totalCostUSD: number;
+	monthlyCostUSD: number;
+	thisMonthGenerations: number;
+	marketRates: {
+		'gpt-4o-mini': { inputPer1M: number; outputPer1M: number };
+		'gpt-4o': { inputPer1M: number; outputPer1M: number };
+	};
 };
 
 const LOG_DIR = path.resolve(process.cwd(), 'data/logs');
@@ -49,10 +71,10 @@ export function logRizzRequest(record: Omit<RizzLogRecord, 'id' | 'timestamp'>):
 			}
 		}
 
-		// Prepend newest log and keep up to 200 recent entries
+		// Prepend newest log and keep up to 500 recent entries
 		existingLogs.unshift(fullRecord);
-		if (existingLogs.length > 200) {
-			existingLogs = existingLogs.slice(0, 200);
+		if (existingLogs.length > 500) {
+			existingLogs = existingLogs.slice(0, 500);
 		}
 
 		fs.writeFileSync(JSON_FILE, JSON.stringify(existingLogs, null, 2), 'utf-8');
@@ -73,4 +95,58 @@ export function getRizzLogs(limit = 50): RizzLogRecord[] {
 	} catch {
 		return [];
 	}
+}
+
+export function getAnalyticsSummary(): AnalyticsSummary {
+	ensureLogDirExists();
+	const logs = getRizzLogs(1000);
+
+	const now = new Date();
+	const currentYearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+	let totalGenerations = 0;
+	let totalImagesProcessed = 0;
+	let totalPromptTokens = 0;
+	let totalCompletionTokens = 0;
+	let totalTokens = 0;
+	let totalCostUSD = 0;
+	let monthlyCostUSD = 0;
+	let thisMonthGenerations = 0;
+
+	for (const log of logs) {
+		totalGenerations++;
+		if (log.hasImage) totalImagesProcessed++;
+
+		const logMonth = log.timestamp.substring(0, 7);
+		const isThisMonth = logMonth === currentYearMonth;
+
+		if (isThisMonth) {
+			thisMonthGenerations++;
+		}
+
+		if (log.usage) {
+			totalPromptTokens += log.usage.promptTokens;
+			totalCompletionTokens += log.usage.completionTokens;
+			totalTokens += log.usage.totalTokens;
+			totalCostUSD += log.usage.costUSD;
+			if (isThisMonth) {
+				monthlyCostUSD += log.usage.costUSD;
+			}
+		}
+	}
+
+	return {
+		totalGenerations,
+		totalImagesProcessed,
+		totalPromptTokens,
+		totalCompletionTokens,
+		totalTokens,
+		totalCostUSD,
+		monthlyCostUSD,
+		thisMonthGenerations,
+		marketRates: {
+			'gpt-4o-mini': { inputPer1M: 0.15, outputPer1M: 0.60 },
+			'gpt-4o': { inputPer1M: 2.50, outputPer1M: 10.00 }
+		}
+	};
 }
