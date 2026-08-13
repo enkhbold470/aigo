@@ -31,6 +31,8 @@
 	<string>AIGo needs access to your photos to read your latest screenshot for rizz generation</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>AIGo needs photo library access to process screenshots</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>NSExtension</key>
 	<dict>
 		<key>NSExtensionPointIdentifier</key>
