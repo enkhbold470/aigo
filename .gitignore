@@ -1,0 +1,31 @@
+# Operating System & IDE
+.DS_Store
+.cursor
+*.xcuserstate
+*.xcuserdatad
+
+# Environment & Secrets (NEVER COMMIT)
+.env
+.env.*
+!.env.example
+web/.env
+web/.env.*
+!web/.env.example
+
+# Xcode & Swift Build Artifacts
+*.o
+*.swiftmodule
+*.swiftdoc
+DerivedData/
+.derivedData/
+ios/build/
+ios/DerivedData/
+ios/*.xcodeproj/project.xcworkspace/xcuserdata/
+ios/*.xcodeproj/xcuserdata/
+
+# Web / Node / SvelteKit Build Artifacts
+web/node_modules/
+web/.svelte-kit/
+web/build/
+web/.vercel/
+web/package/
