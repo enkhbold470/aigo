@@ -31,3 +31,6 @@ web/.vercel/
 web/package/
 web/data/
 data/
+
+# Reference repos
+KeyboardKit/
