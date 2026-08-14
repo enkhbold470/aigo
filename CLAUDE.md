@@ -63,7 +63,7 @@ The main app (`ContentView.swift`) features a streamlined **Personalize** interf
 - Target 1: `AIGo` (`com.aigo.inky.app`)
 - Target 2: `AIGoKeyboard` (`com.aigo.inky.app.keyboard`)
 - App Group: `group.com.aigo.keyboard` (Shared `UserDefaults` & Personalization Settings)
-- Default Backend URL: `http://192.168.0.49:5173`
+- Default Backend URL: `https://aigo-production-dc3d.up.railway.app`
 
 ### Web Backend (`web/`)
 - SvelteKit + Vite server on `0.0.0.0:5173` (LAN accessible for physical iPhone)

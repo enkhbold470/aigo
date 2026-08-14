@@ -11,7 +11,7 @@ public final class AppGroupManager {
     }
 
     public var apiBaseURL: String {
-        get { defaults.string(forKey: "api_base_url") ?? "http://192.168.0.49:5173" }
+        get { defaults.string(forKey: "api_base_url") ?? "https://aigo-production-dc3d.up.railway.app" }
         set { defaults.set(newValue, forKey: "api_base_url") }
     }
 

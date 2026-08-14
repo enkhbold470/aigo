@@ -5,7 +5,7 @@
 - **Main App Target**: `AIGo` (`com.aigo.inky.app`)
 - **Keyboard Extension Target**: `AIGoKeyboard` (`com.aigo.inky.app.keyboard`)
 - **App Group**: `group.com.aigo.keyboard`
-- **Default Server Base URL**: `http://192.168.0.49:5173`
+- **Default Server Base URL**: `https://aigo-production-dc3d.up.railway.app`
 
 ---
 
