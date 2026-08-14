@@ -40,15 +40,19 @@ const LOG_DIR = path.resolve(process.cwd(), 'data/logs');
 const JSONL_FILE = path.join(LOG_DIR, 'rizz_history.jsonl');
 const JSON_FILE = path.join(LOG_DIR, 'rizz_history.json');
 
-function ensureLogDirExists() {
-	if (!fs.existsSync(LOG_DIR)) {
-		fs.mkdirSync(LOG_DIR, { recursive: true });
+function ensureLogDirExists(): boolean {
+	try {
+		if (!fs.existsSync(LOG_DIR)) {
+			fs.mkdirSync(LOG_DIR, { recursive: true });
+		}
+		return true;
+	} catch (err) {
+		console.warn('Filesystem logging unavailable (serverless environment):', err);
+		return false;
 	}
 }
 
 export function logRizzRequest(record: Omit<RizzLogRecord, 'id' | 'timestamp'>): RizzLogRecord {
-	ensureLogDirExists();
-
 	const fullRecord: RizzLogRecord = {
 		id: `rizz_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
 		timestamp: new Date().toISOString(),
@@ -56,28 +60,29 @@ export function logRizzRequest(record: Omit<RizzLogRecord, 'id' | 'timestamp'>):
 	};
 
 	try {
-		// 1. Append to .jsonl log file (append-only log)
-		const line = JSON.stringify(fullRecord) + '\n';
-		fs.appendFileSync(JSONL_FILE, line, 'utf-8');
+		if (ensureLogDirExists()) {
+			const line = JSON.stringify(fullRecord) + '\n';
+			fs.appendFileSync(JSONL_FILE, line, 'utf-8');
 
-		// 2. Maintain .json log file (recent array for easy JSON querying)
-		let existingLogs: RizzLogRecord[] = [];
-		if (fs.existsSync(JSON_FILE)) {
-			try {
-				const content = fs.readFileSync(JSON_FILE, 'utf-8');
-				existingLogs = JSON.parse(content);
-			} catch {
-				existingLogs = [];
+			let existingLogs: RizzLogRecord[] = [];
+			if (fs.existsSync(JSON_FILE)) {
+				try {
+					const content = fs.readFileSync(JSON_FILE, 'utf-8');
+					existingLogs = JSON.parse(content);
+				} catch {
+					existingLogs = [];
+				}
 			}
-		}
 
-		// Prepend newest log and keep up to 500 recent entries
-		existingLogs.unshift(fullRecord);
-		if (existingLogs.length > 500) {
-			existingLogs = existingLogs.slice(0, 500);
-		}
+			existingLogs.unshift(fullRecord);
+			if (existingLogs.length > 500) {
+				existingLogs = existingLogs.slice(0, 500);
+			}
 
-		fs.writeFileSync(JSON_FILE, JSON.stringify(existingLogs, null, 2), 'utf-8');
+			fs.writeFileSync(JSON_FILE, JSON.stringify(existingLogs, null, 2), 'utf-8');
+		} else {
+			console.log('[LOG RECORD]', JSON.stringify(fullRecord));
+		}
 	} catch (err) {
 		console.error('Failed to log rizz request:', err);
 	}
@@ -86,9 +91,8 @@ export function logRizzRequest(record: Omit<RizzLogRecord, 'id' | 'timestamp'>):
 }
 
 export function getRizzLogs(limit = 50): RizzLogRecord[] {
-	ensureLogDirExists();
-	if (!fs.existsSync(JSON_FILE)) return [];
 	try {
+		if (!ensureLogDirExists() || !fs.existsSync(JSON_FILE)) return [];
 		const content = fs.readFileSync(JSON_FILE, 'utf-8');
 		const logs: RizzLogRecord[] = JSON.parse(content);
 		return logs.slice(0, limit);
@@ -98,8 +102,12 @@ export function getRizzLogs(limit = 50): RizzLogRecord[] {
 }
 
 export function getAnalyticsSummary(): AnalyticsSummary {
-	ensureLogDirExists();
-	const logs = getRizzLogs(1000);
+	let logs: RizzLogRecord[] = [];
+	try {
+		logs = getRizzLogs(1000);
+	} catch {
+		logs = [];
+	}
 
 	const now = new Date();
 	const currentYearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
