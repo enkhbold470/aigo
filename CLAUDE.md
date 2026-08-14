@@ -16,19 +16,72 @@
 
 ---
 
-## TestFlight & Production Deployment Workflow
+## Production Deployment
 
-### 1. Build & Export TestFlight Payload (`.ipa`)
-Run the automated TestFlight build script inside `ios/`:
+### Backend
+- **Production URL**: `https://aigo-vert.vercel.app`
+- **Health Check**: `GET /api/health` → `{"status":"ok","service":"AIGo AI Backend","openai":true}`
+- **Rizz Endpoint**: `POST /api/ai/rizz`
+- **Analytics Endpoint**: `GET /api/analytics`
+
+### App Store Connect
+- **App Name**: AIGo Rizz Keyboard
+- **App ID**: `6801409076`
+- **Bundle ID**: `com.aigo.inky.app`
+- **Apple ID**: `en163902@icloud.com`
+- **Team ID**: `129188892` (Enkhbold Ganbold)
+- **Dev Team ID**: `24QC7XFXVJ`
+
+---
+
+## TestFlight & Build Workflow
+
+### 1. Build, Export & Upload to TestFlight (Full Pipeline)
 ```bash
-cd ios && ./build_testflight.sh
+# Clean build, archive, export, and upload in one shot
+cd ios && rm -rf ./build && \
+xcodebuild -project AIGo.xcodeproj -scheme AIGo \
+  -destination "generic/platform=iOS" \
+  -archivePath ./build/AIGo.xcarchive archive && \
+xcodebuild -exportArchive \
+  -archivePath ./build/AIGo.xcarchive \
+  -exportPath ./build/export-testflight \
+  -exportOptionsPlist ./ExportOptions-TestFlight.plist && \
+source ../.env && \
+xcrun altool --upload-app \
+  -f ./build/export-testflight/AIGo.ipa -t ios \
+  -u "en163902@icloud.com" \
+  -p "$APPLE_APP_SPECIFIC_PASSWORD"
 ```
-This produces `ios/build/export/AIGo.ipa` fully validated for App Store Connect.
 
-### 2. Upload to TestFlight / App Store Connect
-Upload using Xcode Organizer or Transporter CLI (`altool` / `xcrun simctl`):
+### 2. Build & Install on Physical Device (iPhone39)
 ```bash
-xcrun altool --upload-app -f ios/build/export/AIGo.ipa -t ios -u YOUR_APPLE_ID -p YOUR_APP_SPECIFIC_PASSWORD
+# Build for connected iPhone39
+xcodebuild -project ios/AIGo.xcodeproj -scheme AIGo \
+  -destination "id=00008120-001A20A01EE1A01E" build
+
+# Install app
+xcrun devicectl device install app \
+  --device 00008120-001A20A01EE1A01E \
+  ~/Library/Developer/Xcode/DerivedData/AIGo-esypgkswfkyltyclyqgspijatllg/Build/Products/Debug-iphoneos/AIGo.app
+
+# Launch app
+xcrun devicectl device process launch \
+  --device 00008120-001A20A01EE1A01E com.aigo.inky.app
+```
+
+### 3. Fastlane Commands
+```bash
+# Create/verify App Store Connect record
+FASTLANE_USER="en163902@icloud.com" FASTLANE_PASSWORD="?Trs6R8q" \
+FASTLANE_APPLE_APPLICATION_SPECIFIC_PASSWORD="kwun-utpc-uiec-sqvs" \
+fastlane run produce app_identifier:"com.aigo.inky.app" itc_team_id:"129188892"
+
+# Add internal TestFlight tester
+FASTLANE_USER="en163902@icloud.com" FASTLANE_PASSWORD="?Trs6R8q" \
+FASTLANE_APPLE_APPLICATION_SPECIFIC_PASSWORD="kwun-utpc-uiec-sqvs" \
+FASTLANE_ITC_TEAM_ID="129188892" \
+fastlane pilot add -a "com.aigo.inky.app" -f "FirstName" -l "LastName" -e "tester@email.com" -g "Internal"
 ```
 
 ---
@@ -63,13 +116,21 @@ The main app (`ContentView.swift`) features a streamlined **Personalize** interf
 - Target 1: `AIGo` (`com.aigo.inky.app`)
 - Target 2: `AIGoKeyboard` (`com.aigo.inky.app.keyboard`)
 - App Group: `group.com.aigo.keyboard` (Shared `UserDefaults` & Personalization Settings)
-- Default Backend URL: `https://aigo-production-dc3d.up.railway.app`
+- Default Backend URL: `https://aigo-vert.vercel.app`
+- App Icon: Custom Gemini-generated Rizz Keyboard logo (lightning bolt "R" on blue-pink gradient)
+- Current Build Version: `1.0 (2)`
 
-### Web Backend (`web/`)
+### Web Dashboard (`web/`)
 - SvelteKit + Vite server on `0.0.0.0:5173` (LAN accessible for physical iPhone)
-- API Route: `/api/ai/rizz`, `/api/analytics`, `/api/logs`
-- Vision AI: OpenAI `gpt-4o-mini` with Contrastive Persona & Negative Constraints system prompt.
-- Environment Key: `OPENAI_API_KEY` stored in `web/.env` (and root `.env`).
+- API Routes: `/api/ai/rizz`, `/api/analytics`, `/api/logs`
+- Vision AI: OpenAI `gpt-4o-mini` with Contrastive Persona & Negative Constraints system prompt
+- Environment Key: `OPENAI_API_KEY` stored in `web/.env` (and root `.env`)
+- Logo: `web/static/logo.png` (same as App Store icon)
+
+### Code Signing & Certificates
+- Distribution Certificate: `55V5H4N7CS`
+- Provisioning Profiles: `AppStore_com.aigo.inky.app.mobileprovision`, `AppStore_com.aigo.inky.app.keyboard.mobileprovision`
+- Export Options: `ios/ExportOptions-TestFlight.plist`
 
 ---
 
@@ -82,8 +143,26 @@ cd web && bun dev
 # Run Svelte / TypeScript checks
 cd web && bun run check
 
-# Build & Deploy to connected physical device (iPhone39)
-cd ios && xcodebuild -project AIGo.xcodeproj -scheme AIGo -destination "id=00008120-001A20A01EE1A01E" build
-xcrun devicectl device install app --device "00008120-001A20A01EE1A01E" /Users/inky/Library/Developer/Xcode/DerivedData/AIGo-esypgkswfkyltyclyqgspijatllg/Build/Products/Debug-iphoneos/AIGo.app
-xcrun devicectl device process launch --device "00008120-001A20A01EE1A01E" com.aigo.inky.app
+# Verify backend health
+curl https://aigo-vert.vercel.app/api/health
+
+# List connected devices
+xcrun xctrace list devices
+```
+
+---
+
+## Environment Variables (`.env`)
+
+```
+OPENAI_API_KEY=sk-...
+APPLE_APP_SPECIFIC_PASSWORD=kwun-utpc-uiec-sqvs
+```
+
+### Fastlane Environment
+```
+FASTLANE_USER=en163902@icloud.com
+FASTLANE_PASSWORD=?Trs6R8q
+FASTLANE_APPLE_APPLICATION_SPECIFIC_PASSWORD=kwun-utpc-uiec-sqvs
+FASTLANE_ITC_TEAM_ID=129188892
 ```
