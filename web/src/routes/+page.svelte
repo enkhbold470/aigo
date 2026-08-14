@@ -265,9 +265,7 @@
 <div class="max-w-6xl mx-auto px-4 py-8">
 	<header class="flex flex-col md:flex-row items-center justify-between gap-6 pb-8 border-b border-slate-800">
 		<div class="flex items-center gap-3">
-			<div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center shadow-lg shadow-indigo-500/20">
-				<Sparkles class="w-6 h-6 text-white" />
-			</div>
+			<img src="/logo.png" alt="AIGo Logo" class="w-12 h-12 rounded-2xl shadow-lg shadow-indigo-500/20 border border-indigo-500/30 object-cover" />
 			<div>
 				<h1 class="text-2xl font-bold tracking-tight text-white flex items-center gap-2">
 					AIGo Keyboard
