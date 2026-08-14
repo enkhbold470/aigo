@@ -1,7 +1,29 @@
 <script lang="ts">
-	import { Sparkles, Smartphone, Layers, Command, Copy, Wand2, Settings, Zap, RefreshCw, Image, Flame, Check, X, BarChart3, DollarSign, Cpu } from 'lucide-svelte';
+	import {
+		Sparkles,
+		Smartphone,
+		Layers,
+		Command,
+		Copy,
+		Wand2,
+		Settings,
+		Zap,
+		RefreshCw,
+		Image,
+		Flame,
+		Check,
+		X,
+		BarChart3,
+		DollarSign,
+		Cpu,
+		Database,
+		Search,
+		BookOpen,
+		ArrowRight,
+		Filter
+	} from 'lucide-svelte';
 
-	type Tab = 'simulator' | 'analytics' | 'shortcuts' | 'snippets' | 'setup';
+	type Tab = 'simulator' | 'analytics' | 'vectordb' | 'shortcuts' | 'snippets' | 'setup';
 	type Chip = { label: string; text: string; icon?: string; tone?: string };
 
 	type AnalyticsData = {
@@ -35,6 +57,27 @@
 		};
 	};
 
+	type VectorResult = {
+		id: string;
+		line: string;
+		category: string;
+		tone: string;
+		intent: string;
+		flirtLevel: number;
+		reasoningTemplate: string;
+		tags: string[];
+		similarity: number;
+		scoreMultiplier?: number;
+	};
+
+	type VectorDbStats = {
+		totalVectors: number;
+		dimensions: number;
+		categories: string[];
+		tones: string[];
+		avgFlirtLevel: string;
+	};
+
 	let activeTab = $state<Tab>('simulator');
 	let inputText = $state(
 		'Hey sarah, are we still meeting for lunch today at 1pm? Let me know if that works!'
@@ -60,9 +103,20 @@
 	let rizzImageBase64 = $state<string | null>(null);
 	let rizzSuggestions = $state<string[]>([]);
 	let copiedRizzIndex = $state<number | null>(null);
+	let currentRagContext = $state<VectorResult[]>([]);
 
 	let analyticsData = $state<AnalyticsData | null>(null);
 	let recentLogs = $state<LogRecord[]>([]);
+
+	// Vector DB State
+	let vectorQuery = $state('i suck at cooking');
+	let vectorCategoryFilter = $state('all');
+	let vectorToneFilter = $state('all');
+	let vectorFlirtFilter = $state<number>(3);
+	let vectorResults = $state<VectorResult[]>([]);
+	let vectorStats = $state<VectorDbStats | null>(null);
+	let isSearchingVector = $state(false);
+	let copiedVectorId = $state<string | null>(null);
 
 	let shortcuts = $state([
 		{ shortcut: '!fix', title: 'Fix Grammar', prompt: 'Fix spelling and grammar while keeping tone natural.' },
@@ -93,6 +147,7 @@
 			});
 
 		void loadAnalytics();
+		void executeVectorSearch();
 	});
 
 	async function loadAnalytics() {
@@ -105,6 +160,29 @@
 			recentLogs = logsData.logs || [];
 		} catch {
 			// ignore
+		}
+	}
+
+	async function executeVectorSearch() {
+		isSearchingVector = true;
+		try {
+			const params = new URLSearchParams();
+			if (vectorQuery.trim()) params.append('q', vectorQuery.trim());
+			if (vectorCategoryFilter !== 'all') params.append('category', vectorCategoryFilter);
+			if (vectorToneFilter !== 'all') params.append('tone', vectorToneFilter);
+			if (vectorFlirtFilter) params.append('flirtLevel', String(vectorFlirtFilter));
+			params.append('limit', '8');
+
+			const res = await fetch(`/api/vector-search?${params.toString()}`);
+			const data = await res.json();
+			vectorResults = data.results || [];
+			if (data.stats) {
+				vectorStats = data.stats;
+			}
+		} catch (err) {
+			console.error('Vector search failed:', err);
+		} finally {
+			isSearchingVector = false;
 		}
 	}
 
@@ -196,6 +274,9 @@
 			if (data.options && Array.isArray(data.options)) {
 				rizzSuggestions = data.options;
 			}
+			if (data.ragContext && Array.isArray(data.ragContext)) {
+				currentRagContext = data.ragContext;
+			}
 			if (data.simulated !== undefined) {
 				simulated = Boolean(data.simulated);
 			}
@@ -235,6 +316,19 @@
 		}
 	}
 
+	function copyVectorLine(id: string, text: string) {
+		void navigator.clipboard.writeText(text);
+		copiedVectorId = id;
+		setTimeout(() => {
+			copiedVectorId = null;
+		}, 2000);
+	}
+
+	function testLineInSimulator(line: string) {
+		rizzContext = line;
+		activeTab = 'simulator';
+	}
+
 	function handleAddShortcut() {
 		if (!newShortcut || !newPrompt) return;
 		shortcuts = [
@@ -271,17 +365,20 @@
 					AIGo Keyboard
 					<span class="text-xs px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">iOS Native</span>
 				</h1>
-				<p class="text-sm text-slate-400">Clipboard analysis, rizz generator, screenshot smart reply, tone rewrite, and token cost tracking.</p>
+				<p class="text-sm text-slate-400">Vector DB RAG knowledge retrieval, rizz generator, screenshot smart reply, and token cost tracking.</p>
 			</div>
 		</div>
 
 		<div class="flex items-center gap-3">
 			<span class={`text-xs px-2 py-1 rounded-full border ${openaiReady ? 'border-emerald-500/40 text-emerald-300 bg-emerald-950/40' : 'border-amber-500/40 text-amber-300 bg-amber-950/40'}`}>
-				{openaiReady === null ? 'Checking OpenAI…' : openaiReady ? 'OpenAI connected' : 'Simulated mode (add OPENAI_API_KEY)'}
+				{openaiReady === null ? 'Checking OpenAI…' : openaiReady ? 'OpenAI + Vector DB' : 'Simulated mode (add OPENAI_API_KEY)'}
 			</span>
 			<nav class="flex items-center gap-1 bg-slate-900/80 p-1.5 rounded-xl border border-slate-800">
 				<button onclick={() => (activeTab = 'simulator')} class={`px-3.5 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${activeTab === 'simulator' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>
 					<Smartphone class="w-4 h-4" /> Simulator
+				</button>
+				<button onclick={() => (activeTab = 'vectordb')} class={`px-3.5 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${activeTab === 'vectordb' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>
+					<Database class="w-4 h-4 text-emerald-400" /> Vector DB & RAG
 				</button>
 				<button onclick={() => (activeTab = 'analytics')} class={`px-3.5 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${activeTab === 'analytics' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>
 					<BarChart3 class="w-4 h-4" /> Analytics & Cost
@@ -308,9 +405,9 @@
 						<div class="flex items-center justify-between">
 							<h2 class="text-base font-semibold text-white flex items-center gap-2">
 								<Flame class="w-5 h-5 text-orange-400" />
-								Rizz Generator (Screenshot & Text)
+								Rizz Generator (Screenshot, Text & RAG)
 							</h2>
-							<span class="text-xs px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-300 border border-orange-500/30 font-medium">all-lowercase + emojis</span>
+							<span class="text-xs px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-medium">Vector RAG Enhanced</span>
 						</div>
 
 						<div class="space-y-3">
@@ -335,14 +432,14 @@
 
 							<div>
 								<label for="rizz-context" class="block text-xs font-medium text-slate-300 mb-1">Context / Last Message Sent</label>
-								<textarea id="rizz-context" bind:value={rizzContext} placeholder="e.g. she said: i'm so bored today, what are you doing?" rows={2} class="w-full bg-slate-950/80 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-all resize-none"></textarea>
+								<textarea id="rizz-context" bind:value={rizzContext} placeholder="e.g. she said: i suck at cooking, my kitchen is a hazard" rows={2} class="w-full bg-slate-950/80 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-all resize-none"></textarea>
 							</div>
 
 							<button onclick={handleGenerateRizz} disabled={isGeneratingRizz} class="w-full py-2.5 rounded-xl bg-gradient-to-r from-orange-500 via-pink-500 to-indigo-600 hover:from-orange-600 hover:to-indigo-700 text-white font-medium text-sm shadow-md shadow-orange-500/10 transition-all flex items-center justify-center gap-2 disabled:opacity-50">
 								{#if isGeneratingRizz}
-									<RefreshCw class="w-4 h-4 animate-spin" /> Generating rizz…
+									<RefreshCw class="w-4 h-4 animate-spin" /> Querying Vector DB & Generating…
 								{:else}
-									<Flame class="w-4 h-4" /> {rizzSuggestions.length > 0 ? 'Regenerate rizz ↺' : 'Generate rizz'}
+									<Flame class="w-4 h-4" /> {rizzSuggestions.length > 0 ? 'Regenerate rizz ↺' : 'Generate rizz (with RAG)'}
 								{/if}
 							</button>
 
@@ -364,6 +461,32 @@
 											</button>
 										</div>
 									{/each}
+								</div>
+							{/if}
+
+							<!-- Live RAG Inspection Block in Simulator -->
+							{#if currentRagContext.length > 0}
+								<div class="mt-4 pt-3 border-t border-indigo-500/20 space-y-2">
+									<div class="flex items-center justify-between">
+										<span class="text-xs font-semibold text-emerald-300 flex items-center gap-1.5">
+											<Database class="w-3.5 h-3.5" /> Retrieved RAG Vector Context ({currentRagContext.length} matched lines):
+										</span>
+									</div>
+									<div class="space-y-2">
+										{#each currentRagContext as ref}
+											<div class="p-2.5 rounded-lg bg-slate-950/80 border border-slate-800 text-xs space-y-1">
+												<div class="flex items-center justify-between">
+													<div class="flex items-center gap-1.5">
+														<span class="px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 text-[10px] font-medium">{ref.category}</span>
+														<span class="text-slate-400 text-[10px]">Tone: {ref.tone}</span>
+													</div>
+													<span class="font-mono text-emerald-400 text-[10px] font-bold">{(ref.similarity * 100).toFixed(0)}% match</span>
+												</div>
+												<p class="font-mono text-slate-200 italic text-[11px]">"{ref.line}"</p>
+												<p class="text-[10px] text-slate-400">💡 <span class="text-slate-300">{ref.reasoningTemplate}</span></p>
+											</div>
+										{/each}
+									</div>
 								</div>
 							{/if}
 						</div>
@@ -436,6 +559,185 @@
 								</button>
 							</div>
 						</div>
+					</div>
+				</div>
+			</div>
+
+		{:else if activeTab === 'vectordb'}
+			<!-- Vector DB Explorer & RAG Inspector Tab -->
+			<div class="space-y-6">
+				<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+					<div>
+						<h2 class="text-xl font-bold text-white flex items-center gap-2">
+							<Database class="w-6 h-6 text-emerald-400" />
+							Vector DB Explorer & RAG Reasoning Inspector
+						</h2>
+						<p class="text-sm text-slate-400">Real-time cosine similarity search across indexed high-converting rizz lines and psychological reasoning templates.</p>
+					</div>
+					<div class="flex items-center gap-3">
+						<span class="text-xs px-3 py-1.5 rounded-xl bg-emerald-950/40 border border-emerald-500/30 text-emerald-300 font-mono">
+							{vectorStats ? `${vectorStats.totalVectors} Vectors Indexed (${vectorStats.dimensions}-dim)` : 'Indexing Vector DB…'}
+						</span>
+					</div>
+				</div>
+
+				<!-- Search & Filter Controls -->
+				<div class="bg-slate-900/90 rounded-2xl border border-slate-800 p-5 space-y-4 shadow-xl">
+					<div class="flex flex-col md:flex-row gap-3">
+						<div class="relative flex-1">
+							<Search class="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
+							<input
+								type="text"
+								bind:value={vectorQuery}
+								onkeydown={(e) => e.key === 'Enter' && executeVectorSearch()}
+								placeholder="Query semantic index (e.g. 'sushi date', 'instagram story selfie', 'late night text', 'bad cooking')..."
+								class="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-all font-mono"
+							/>
+						</div>
+						<button
+							onclick={executeVectorSearch}
+							disabled={isSearchingVector}
+							class="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-sm flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+						>
+							{#if isSearchingVector}
+								<RefreshCw class="w-4 h-4 animate-spin" /> Searching…
+							{:else}
+								<Search class="w-4 h-4" /> Vector Search
+							{/if}
+						</button>
+					</div>
+
+					<div class="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+						<!-- Category Filter -->
+						<div>
+							<label for="category-filter" class="block text-xs font-medium text-slate-400 mb-1">Category Filter</label>
+							<select
+								id="category-filter"
+								bind:value={vectorCategoryFilter}
+								onchange={executeVectorSearch}
+								class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500"
+							>
+								<option value="all">All Categories ({vectorStats?.categories.length ?? 'All'})</option>
+								{#if vectorStats}
+									{#each vectorStats.categories as cat}
+										<option value={cat}>{cat}</option>
+									{/each}
+								{/if}
+							</select>
+						</div>
+
+						<!-- Tone Filter -->
+						<div>
+							<label for="tone-filter" class="block text-xs font-medium text-slate-400 mb-1">Tone Filter</label>
+							<select
+								id="tone-filter"
+								bind:value={vectorToneFilter}
+								onchange={executeVectorSearch}
+								class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500"
+							>
+								<option value="all">All Tones</option>
+								<option value="Friendly">Friendly</option>
+								<option value="Playful tease">Playful tease</option>
+								<option value="Bold">Bold</option>
+								<option value="Brainrot / Gen-Z Slang">Brainrot / Gen-Z Slang</option>
+							</select>
+						</div>
+
+						<!-- Flirt Level Slider -->
+						<div>
+							<div class="flex items-center justify-between mb-1">
+								<label for="flirt-filter" class="text-xs font-medium text-slate-400">Flirt Intensity</label>
+								<span class="text-xs font-mono text-orange-400 font-bold">{vectorFlirtFilter}/5</span>
+							</div>
+							<input
+								id="flirt-filter"
+								type="range"
+								min="1"
+								max="5"
+								bind:value={vectorFlirtFilter}
+								onchange={executeVectorSearch}
+								class="w-full accent-orange-500 bg-slate-950 cursor-pointer"
+							/>
+						</div>
+					</div>
+				</div>
+
+				<!-- Matched Results List -->
+				<div class="space-y-4">
+					<div class="flex items-center justify-between text-xs text-slate-400 px-1">
+						<span>Found <strong class="text-white">{vectorResults.length}</strong> high-scoring vector matches</span>
+						<span>Sorted by Cosine Similarity (Descending)</span>
+					</div>
+
+					{#if vectorResults.length === 0 && !isSearchingVector}
+						<div class="p-8 rounded-2xl bg-slate-900/50 border border-slate-800 text-center space-y-2">
+							<Database class="w-8 h-8 text-slate-600 mx-auto" />
+							<p class="text-sm text-slate-400">No vectors match your search criteria. Try a different query or set filters to "All".</p>
+						</div>
+					{/if}
+
+					<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+						{#each vectorResults as item}
+							<div class="p-5 rounded-2xl bg-slate-900/90 border border-slate-800 hover:border-indigo-500/40 transition-all space-y-3.5 shadow-lg">
+								<!-- Header: Category, Tone & Similarity Score -->
+								<div class="flex items-center justify-between gap-2">
+									<div class="flex flex-wrap items-center gap-1.5">
+										<span class="px-2.5 py-1 rounded-lg bg-indigo-500/10 text-indigo-300 text-xs font-semibold border border-indigo-500/20">
+											{item.category}
+										</span>
+										<span class="px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 text-[11px]">
+											{item.tone}
+										</span>
+									</div>
+									<div class="flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-950/60 border border-emerald-500/40 text-emerald-400 font-mono text-xs font-bold">
+										<Zap class="w-3 h-3 text-emerald-400" />
+										{(item.similarity * 100).toFixed(0)}% sim
+									</div>
+								</div>
+
+								<!-- Rizz Line -->
+								<div class="p-3.5 rounded-xl bg-slate-950 border border-slate-800/80 font-mono text-sm text-indigo-100 font-medium leading-relaxed">
+									"{item.line}"
+								</div>
+
+								<!-- Psychological Reasoning Template -->
+								<div class="p-3 rounded-xl bg-indigo-950/20 border border-indigo-500/20 space-y-1">
+									<span class="text-[11px] font-semibold text-indigo-300 flex items-center gap-1">
+										<BookOpen class="w-3.5 h-3.5 text-indigo-400" /> RAG Reasoning Strategy:
+									</span>
+									<p class="text-xs text-slate-300 leading-relaxed">{item.reasoningTemplate}</p>
+								</div>
+
+								<!-- Tags & Actions -->
+								<div class="flex items-center justify-between pt-1">
+									<div class="flex flex-wrap gap-1">
+										{#each item.tags.slice(0, 4) as tag}
+											<span class="text-[10px] text-slate-500 px-1.5 py-0.5 rounded bg-slate-950 border border-slate-800/60">#{tag}</span>
+										{/each}
+									</div>
+
+									<div class="flex items-center gap-2">
+										<button
+											onclick={() => testLineInSimulator(item.line)}
+											class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition-all flex items-center gap-1 border border-slate-700"
+											title="Send to Simulator"
+										>
+											Test <ArrowRight class="w-3 h-3" />
+										</button>
+										<button
+											onclick={() => copyVectorLine(item.id, item.line)}
+											class="px-2.5 py-1 rounded-lg bg-indigo-600/30 hover:bg-indigo-600 text-indigo-200 text-xs font-medium transition-all flex items-center gap-1"
+										>
+											{#if copiedVectorId === item.id}
+												<Check class="w-3.5 h-3.5 text-emerald-400" /> Copied!
+											{:else}
+												<Copy class="w-3.5 h-3.5" /> Copy
+											{/if}
+										</button>
+									</div>
+								</div>
+							</div>
+						{/each}
 					</div>
 				</div>
 			</div>

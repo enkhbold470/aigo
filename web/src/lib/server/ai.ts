@@ -1,5 +1,6 @@
 import OpenAI from 'openai';
 import { env } from '$env/dynamic/private';
+import { queryVectorDB, type VectorSearchResult } from './vectorDb';
 
 export type Suggestion = {
 	label: string;
@@ -307,13 +308,8 @@ export async function generateRizz(
 	options: string[];
 	simulated: boolean;
 	usage?: UsageStats;
+	ragContext?: VectorSearchResult[];
 }> {
-	const openai = client();
-	if (!openai) {
-		const items = localRizzItems();
-		return { suggestions: items, options: items.map((i) => i.text), simulated: true };
-	}
-
 	const gender = personalization?.gender || 'Male';
 	const sexuality = personalization?.sexuality || 'Straight';
 	const age = personalization?.age || 22;
@@ -323,6 +319,34 @@ export async function generateRizz(
 	const toneStyle = personalization?.toneStyle || 'Brainrot / Gen-Z Slang';
 	const flirtLevel = personalization?.flirtLevel || 3;
 
+	// 1. Query Vector DB for relevant reference lines & reasoning templates
+	const ragMatches = await queryVectorDB({
+		text: context,
+		ocrContext: imageBase64 ? 'screenshot chat image' : '',
+		tone: toneStyle,
+		intent,
+		flirtLevel,
+		topK: 4,
+		minSimilarity: 0.15
+	});
+
+	const openai = client();
+	if (!openai) {
+		const items = ragMatches.length >= 3
+			? [
+					{ tone: 'Friendly', text: ragMatches[0].line },
+					{ tone: 'Playful tease', text: ragMatches[1].line },
+					{ tone: 'Bold', text: ragMatches[2].line }
+				]
+			: localRizzItems();
+		return {
+			suggestions: items,
+			options: items.map((i) => i.text),
+			simulated: true,
+			ragContext: ragMatches
+		};
+	}
+
 	const flirtLabels: Record<number, string> = {
 		1: 'Mild & subtle flirting',
 		2: 'Smooth & witty teasing',
@@ -331,6 +355,21 @@ export async function generateRizz(
 		5: 'Unhinged & down bad'
 	};
 	const flirtDesc = flirtLabels[flirtLevel] || 'Playful banter';
+
+	// Format retrieved RAG context for injection into LLM prompt
+	let ragContextPrompt = '';
+	if (ragMatches.length > 0) {
+		ragContextPrompt = `\nRETRIEVED VECTOR DB RAG REFERENCES & REASONING FRAMEWORKS:\n` +
+			ragMatches
+				.map(
+					(m, idx) =>
+						`[Ref ${idx + 1}] Category: ${m.category} | Tone: ${m.tone} | Similarity: ${(m.similarity * 100).toFixed(0)}%\n` +
+						`  • Example Pattern: "${m.line}"\n` +
+						`  • Psychological Strategy: ${m.reasoningTemplate}`
+				)
+				.join('\n\n') +
+			`\n\nUse the reasoning strategies and tonal dynamics above to synthesize novel, high-converting replies strictly calibrated to the screenshot/context!`;
+	}
 
 	const systemPrompt = `You are the world's sharpest, most observant dating & texting AI. You specialize in analyzing conversation screenshots and generating 3 DISTINCT, HIGH-CONVERTING replies.
 
@@ -362,6 +401,7 @@ USER PROFILE & TUNING:
 - Casing Rule: "${casingStyle}" (CRITICAL: if "all lowercase", write strictly in lowercase with ZERO capital letters. If "ALL CAPS", use upper case. If "standard casing", use normal capitalization.)
 - Tone Style: "${toneStyle}" (If "Brainrot / Gen-Z Slang", use authentic current slang like "ngl", "fr", "lowkey", "cooked", "real", "deadass", "aura". If "Proper English", use clean grammar.)
 - Flirt Intensity: ${flirtLevel}/5 (${flirtDesc})
+${ragContextPrompt}
 
 OUTPUT REQUIREMENTS:
 - Keep each reply short (1-2 sentences max).
@@ -444,7 +484,8 @@ OUTPUT REQUIREMENTS:
 			completionTokens,
 			totalTokens,
 			costUSD
-		}
+		},
+		ragContext: ragMatches
 	};
 }
 

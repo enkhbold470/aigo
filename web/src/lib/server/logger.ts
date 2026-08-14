@@ -12,6 +12,7 @@ export type RizzLogRecord = {
 	simulated: boolean;
 	durationMs: number;
 	clientIp?: string;
+	ragContextCount?: number;
 	usage?: {
 		model: string;
 		promptTokens: number;

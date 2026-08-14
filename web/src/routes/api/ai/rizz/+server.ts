@@ -35,6 +35,7 @@ export async function POST({ request, getClientAddress }) {
 			simulated: result.simulated,
 			durationMs: Date.now() - startTime,
 			clientIp,
+			ragContextCount: result.ragContext?.length,
 			usage: result.usage
 		});
 
