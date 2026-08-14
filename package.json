@@ -1,0 +1,9 @@
+{
+	"name": "aigo",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"build": "npm --prefix web install && npm --prefix web run build",
+		"start": "node web/build"
+	}
+}
