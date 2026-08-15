@@ -1,6 +1,13 @@
-import OpenAI from 'openai';
-import { env } from '$env/dynamic/private';
+import type OpenAI from 'openai';
 import { queryVectorDB, type VectorSearchResult } from './vectorDb';
+import {
+	createClient,
+	estimateCostUSD,
+	getApiKey,
+	getBaseUrl,
+	getModel,
+	getVisionModel
+} from './aiConfig';
 
 export type Suggestion = {
 	label: string;
@@ -10,13 +17,20 @@ export type Suggestion = {
 };
 
 function client(): OpenAI | null {
-	const apiKey = env.OPENAI_API_KEY;
-	if (!apiKey) return null;
-	return new OpenAI({ apiKey });
+	return createClient();
 }
 
 export function hasOpenAIKey(): boolean {
-	return Boolean(env.OPENAI_API_KEY);
+	return Boolean(getApiKey());
+}
+
+/** Surfaced by /api/health so the active gateway is visible without leaking the key. */
+export function aiConfigSummary(): { configured: boolean; baseUrl: string; model: string } {
+	return {
+		configured: Boolean(getApiKey()),
+		baseUrl: getBaseUrl() ?? 'https://api.openai.com/v1',
+		model: getModel()
+	};
 }
 
 const TRANSFORM_INSTRUCTIONS: Record<string, string> = {
@@ -49,7 +63,7 @@ export async function transformText(
 	if (customPrompt) system += ` Additional instruction: ${customPrompt}`;
 
 	const completion = await openai.chat.completions.create({
-		model: 'gpt-4o-mini',
+		model: getModel(),
 		messages: [
 			{ role: 'system', content: system },
 			{ role: 'user', content: trimmed }
@@ -88,7 +102,7 @@ export async function analyzeClipboard(
 	}
 
 	const completion = await openai.chat.completions.create({
-		model: 'gpt-4o-mini',
+		model: getModel(),
 		messages: [
 			{
 				role: 'user',
@@ -146,7 +160,7 @@ export async function analyzeScreenshot(
 		: `data:image/jpeg;base64,${imageBase64}`;
 
 	const completion = await openai.chat.completions.create({
-		model: 'gpt-4o-mini',
+		model: getVisionModel(),
 		messages: [
 			{
 				role: 'user',
@@ -192,7 +206,7 @@ export async function completePhrase(
 	}
 
 	const completion = await openai.chat.completions.create({
-		model: 'gpt-4o-mini',
+		model: getModel(),
 		messages: [
 			{
 				role: 'user',
@@ -371,41 +385,71 @@ export async function generateRizz(
 			`\n\nUse the reasoning strategies and tonal dynamics above to synthesize novel, high-converting replies strictly calibrated to the screenshot/context!`;
 	}
 
-	const systemPrompt = `You are the world's sharpest, most observant dating & texting AI. You specialize in analyzing conversation screenshots and generating 3 DISTINCT, HIGH-CONVERTING replies.
+	const systemPrompt = `You are the ULTIMATE Gen-Z rizz machine. You live and breathe brainrot slang, meme culture, and high-conversion dating energy. You specialize in analyzing chat screenshots and generating 3 FIRE, DISTINCT replies that make them OBSESSED.
 
 SCREENSHOT & BUBBLE ANALYSIS INSTRUCTIONS:
 1. LOCATE THE LATEST INCOMING MESSAGE (on the LEFT side of screenshot):
-   - iMessage / IG / WhatsApp / Tinder / Hinge: Left grey/white bubbles = INCOMING message from crush/match. Right blue/green/purple = outgoing.
-   - Find the VERY LAST message sent by the OTHER person. Your 3 replies MUST directly reference that specific message or photo!
-2. STRICT TONE CONTRAST & NEGATIVE CONSTRAINTS (CRITICAL - DO NOT GENERATE SIMILAR TEXT!):
+   - iMessage / IG / WhatsApp / Tinder / Hinge / Bumble: Left grey/white bubbles = INCOMING message from the crush/match. Right blue/green/purple = outgoing.
+   - Find the VERY LAST message sent by the OTHER person. Your 3 replies MUST directly reference that specific message or photo with laser precision!
 
-   • Option 1: "Friendly" (Role: Casual Banter & Relatable Callback)
-     - Goal: Agree, validate, or add a funny relatable detail to their last message.
-     - Negative Constraint: DO NOT tease them. DO NOT propose a date.
-     - Example (if they say "i suck at cooking"): "honestly same, my microwave is doing 90% of the heavy lifting 😭"
+2. STRICT TONE CONTRAST & NEGATIVE CONSTRAINTS (CRITICAL - VIOLATE THESE AND YOU FAIL):
 
-   • Option 2: "Playful tease" (Role: Playful Callout & Skeptical Pushback)
-     - Goal: Playfully call them out, act playfully skeptical, or challenge them.
-     - Negative Constraint: DO NOT agree with them. DO NOT be sweet or complimentary.
-     - Example (if they say "i suck at cooking"): "so what you're saying is i need to bring fire insurance if you ever invite me over 💀"
+   • Option 1: "Friendly" (Role: Relatable Vibes & Shared Experience)
+     - Goal: Match their energy, add a funny personal detail, or vibe with them.
+     - Negative Constraint: NO teasing. NO date proposals. NO flirting. Pure vibes only.
+     - Example (if they say "i suck at cooking"): "same my airfryer has a restraining order against me 😭"
+     - Example (if they post a fit pic): "this fit got me weak fr no cap"
 
-   • Option 3: "Bold" (Role: Direct Flirt & Power Move / Date Proposal)
-     - Goal: Confident, direct flirt or concrete date proposal.
-     - Negative Constraint: DO NOT make passive small talk. Skip to the move.
-     - Example (if they say "i suck at cooking"): "good thing i'm taking you out for proper drinks this week then. friday 8pm? 🍸"
+   • Option 2: "Playful tease" (Role: Savage Roast & Push-Pull Energy)
+     - Goal: Playfully call them out, act skeptical, challenge them, or reverse uno card them.
+     - Negative Constraint: NO agreement. NO compliments. NO being sweet. Pure chaos energy.
+     - Example (if they say "i suck at cooking"): "damn so i should bring my own chef when i come over? 💀"
+     - Example (if they post a fit pic): "ai generated and we know it, where the receipt at? 🧐"
+
+   • Option 3: "Bold" (Role: Unhinged Down Bad & Power Move)
+     - Goal: Direct flirt, concrete date proposal, or straight up sexual tension.
+     - Negative Constraint: NO passive energy. NO small talk. NO beating around the bush. Get to the point.
+     - Example (if they say "i suck at cooking"): "bet i can still feed you something good, my place or yours? 😏"
+     - Example (if they post a fit pic): "drop the location or i'm manifesting you in my dm's tonight 🔥"
+
+3. GEN-Z BRAINROT SLANG RULES (Use these NATURALLY when toneStyle is "Brainrot / Gen-Z Slang"):
+   - "ngl" = not gonna lie
+   - "fr" = for real
+   - "lowkey" = secretly, kinda
+   - "highkey" = obviously, definitely
+   - "cooked" = crazy, wild, insane
+   - "deadass" = seriously
+   - "cap" = lying / fake
+   - "no cap" = no lie / serious
+   - "aura" = vibe / energy
+   - "rizz" = charisma / game
+   - "sigma" = confident, independent
+   - "gyat" = expression of shock at appearance
+   - "skibidi" = chaotic, wild energy
+   - "ohio" = chaos, randomness
+   - "delulu" = delusional (but in a confident way)
+   - "slay" = doing amazing
+   - "bussin" = really good (food)
+   - "fanum tax" = taking some of someone's food
+   - "w" = win
+   - "L" = loss
+   - "ratio" = getting more replies than likes
+   - "glizzy" = hot dog (or sometimes gun, context matters)
 
 USER PROFILE & TUNING:
 - Sender Profile: ${gender}, ${sexuality}, age ${age}
 - Target Goal/Intent: ${intent}
 - App Context: ${platform}
 - Casing Rule: "${casingStyle}" (CRITICAL: if "all lowercase", write strictly in lowercase with ZERO capital letters. If "ALL CAPS", use upper case. If "standard casing", use normal capitalization.)
-- Tone Style: "${toneStyle}" (If "Brainrot / Gen-Z Slang", use authentic current slang like "ngl", "fr", "lowkey", "cooked", "real", "deadass", "aura". If "Proper English", use clean grammar.)
+- Tone Style: "${toneStyle}"
 - Flirt Intensity: ${flirtLevel}/5 (${flirtDesc})
 ${ragContextPrompt}
 
 OUTPUT REQUIREMENTS:
-- Keep each reply short (1-2 sentences max).
-- Match the casing "${casingStyle}" 100% strictly.
+- Keep each reply SHORT (1-2 sentences max, aim for under 15 words).
+- Use emojis NATURALLY and SPARINGLY (1-2 per reply max).
+- Match the casing "${casingStyle}" 100% strictly - this is non-negotiable.
+- NO markdown, NO code blocks, NO extra formatting.
 - Return JSON format:
 {
   "suggestions": [
@@ -433,7 +477,7 @@ OUTPUT REQUIREMENTS:
 		});
 	}
 
-	const targetModel = 'gpt-4o-mini';
+	const targetModel = imageBase64 ? getVisionModel() : getModel();
 	const completion = await openai.chat.completions.create({
 		model: targetModel,
 		messages: [
@@ -462,17 +506,11 @@ OUTPUT REQUIREMENTS:
 		suggestions = localRizzItems();
 	}
 
-	// Calculate Usage & Cost based on current market rates ($0.15/1M input, $0.60/1M output for gpt-4o-mini)
 	const model = completion.model || targetModel;
 	const promptTokens = completion.usage?.prompt_tokens ?? 0;
 	const completionTokens = completion.usage?.completion_tokens ?? 0;
 	const totalTokens = completion.usage?.total_tokens ?? (promptTokens + completionTokens);
-
-	const isMini = model.includes('mini');
-	const inputRate = isMini ? 0.15 : 2.50; // $ per 1M tokens
-	const outputRate = isMini ? 0.60 : 10.00; // $ per 1M tokens
-
-	const costUSD = (promptTokens * (inputRate / 1_000_000)) + (completionTokens * (outputRate / 1_000_000));
+	const costUSD = estimateCostUSD(model, promptTokens, completionTokens);
 
 	return {
 		suggestions,

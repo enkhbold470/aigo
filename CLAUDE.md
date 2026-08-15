@@ -123,8 +123,8 @@ The main app (`ContentView.swift`) features a streamlined **Personalize** interf
 ### Web Dashboard (`web/`)
 - SvelteKit + Vite server on `0.0.0.0:5173` (LAN accessible for physical iPhone)
 - API Routes: `/api/ai/rizz`, `/api/analytics`, `/api/logs`
-- Vision AI: OpenAI `gpt-4o-mini` with Contrastive Persona & Negative Constraints system prompt
-- Environment Key: `OPENAI_API_KEY` stored in `web/.env` (and root `.env`)
+- Vision AI: OpenAI-compatible gateway, model set by `AI_MODEL` (default `google/gemini-3-5-flash-lite`), with Contrastive Persona & Negative Constraints system prompt
+- Environment: `OPENAI_API_KEY` + `BASE_URL` stored in `web/.env` (and root `.env`); `/api/health` reports the active gateway and model
 - Logo: `web/static/logo.png` (same as App Store icon)
 
 ### Code Signing & Certificates

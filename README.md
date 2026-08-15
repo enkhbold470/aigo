@@ -6,7 +6,7 @@ AI-native iOS keyboard: clipboard analysis, screenshot smart reply, tone rewrite
 
 - **iOS:** Swift + SwiftUI keyboard extension (`UIInputViewController`)
 - **Web:** SvelteKit + Bun + Tailwind
-- **AI:** OpenAI `gpt-4o-mini` (text + vision)
+- **AI:** Any OpenAI-compatible gateway (default `google/gemini-3-5-flash-lite`, text + vision)
 - **Data:** Convex (optional, for later sync)
 
 ## Run the web AI backend
@@ -14,9 +14,16 @@ AI-native iOS keyboard: clipboard analysis, screenshot smart reply, tone rewrite
 ```bash
 cd web
 cp .env.example .env
-# put your OPENAI_API_KEY in web/.env
-bun dev
+# set OPENAI_API_KEY and BASE_URL in web/.env
+pnpm install
+pnpm dev
 ```
+
+`BASE_URL` points at the OpenAI-compatible gateway and may be given as a bare
+host, a `/v1` root, or a full `/v1/chat/completions` URL — it is normalized to
+the API root the OpenAI SDK expects. Omit it to use `api.openai.com`. Override
+the model with `AI_MODEL`, and the screenshot/vision model with `AI_VISION_MODEL`.
+Check the active configuration at `/api/health`.
 
 Opens at `http://127.0.0.1:5173`. The keyboard talks to:
 

@@ -1,6 +1,3 @@
-import OpenAI from 'openai';
-import { env } from '$env/dynamic/private';
-
 export type VectorItem = {
 	id: string;
 	line: string;
@@ -344,12 +341,6 @@ export function generateSemanticVector(text: string): number[] {
 for (const item of VECTOR_KNOWLEDGE_BASE) {
 	const contentToEmbed = `${item.line} ${item.category} ${item.tags.join(' ')} ${item.reasoningTemplate} ${item.tone} ${item.intent}`;
 	item.vector = generateSemanticVector(contentToEmbed);
-}
-
-function getOpenAIClient(): OpenAI | null {
-	const apiKey = env.OPENAI_API_KEY;
-	if (!apiKey) return null;
-	return new OpenAI({ apiKey });
 }
 
 export async function computeEmbedding(text: string): Promise<number[]> {

@@ -35,10 +35,7 @@
 		totalCostUSD: number;
 		monthlyCostUSD: number;
 		thisMonthGenerations: number;
-		marketRates: {
-			'gpt-4o-mini': { inputPer1M: number; outputPer1M: number };
-			'gpt-4o': { inputPer1M: number; outputPer1M: number };
-		};
+		marketRates: Record<string, { inputPer1M: number; outputPer1M: number }>;
 	};
 
 	type LogRecord = {
@@ -850,7 +847,7 @@
 													{log.hasImage ? '📷 Screenshot' : '💬 Text'}
 												</span>
 											</td>
-											<td class="py-2.5 px-3 text-slate-300">{log.usage?.model || 'gpt-4o-mini'}</td>
+											<td class="py-2.5 px-3 text-slate-300">{log.usage?.model || '—'}</td>
 											<td class="py-2.5 px-3 text-indigo-300">{log.usage?.promptTokens ?? '—'}</td>
 											<td class="py-2.5 px-3 text-purple-300">{log.usage?.completionTokens ?? '—'}</td>
 											<td class="py-2.5 px-3 font-bold text-white">{log.usage?.totalTokens ?? '—'}</td>

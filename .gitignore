@@ -24,6 +24,7 @@ ios/*.xcodeproj/project.xcworkspace/xcuserdata/
 ios/*.xcodeproj/xcuserdata/
 
 # Web / Node / SvelteKit Build Artifacts
+node_modules/
 web/node_modules/
 web/.svelte-kit/
 web/build/

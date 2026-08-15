@@ -32,8 +32,8 @@ The backend OpenAI vision pipeline relies on **Contrastive Personas**, **Negativ
    - `Playful tease`: Playful callout & skeptical pushback (No sweet compliments, no agreeing).
    - `Bold`: Direct flirt & date invitation (No passive small talk).
 4. **Sampling**: Temperature set to `0.92` for optimal creative separation.
-5. **Model**: OpenAI `gpt-4o-mini` (vision-capable).
-6. **Cost Tracking**: Each request logs prompt/completion tokens and calculates USD cost at current market rates ($0.15/1M prompt, $0.60/1M completion tokens).
+5. **Model**: configurable via `AI_MODEL` (default `google/gemini-3-5-flash-lite`, vision-capable). Screenshot requests can use a separate `AI_VISION_MODEL`. Resolved in `src/lib/server/aiConfig.ts`.
+6. **Cost Tracking**: Each request logs prompt/completion tokens and calculates USD cost from the per-model rate table in `src/lib/server/aiConfig.ts`.
 
 ---
 
@@ -43,7 +43,7 @@ The analytics dashboard (`src/routes/+page.svelte`) displays:
 - Total prompt tokens, completion tokens, and all-time USD spend
 - Current month spend breakdown
 - Per-request token log table
-- Market rate reference table for `gpt-4o-mini` and `gpt-4o`
+- Market rate reference table, derived from the models actually seen in logs plus the configured default
 
 Data is aggregated in `src/lib/server/logger.ts` and exposed via `/api/analytics`.
 

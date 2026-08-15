@@ -19,10 +19,37 @@ function options() {
   return new Response(null, { status: 204, headers: corsHeaders });
 }
 
+const DEFAULT_MODEL = "google/gemini-3-5-flash-lite";
+
+// The OpenAI SDK appends the endpoint path itself, so collapse BASE_URL to the
+// API root whether it is given as a bare host, a /v1 root, or a full endpoint.
+function normalizeBaseUrl(raw: string | undefined): string | undefined {
+  const trimmed = (raw ?? "").trim();
+  if (!trimmed) return undefined;
+
+  let url: URL;
+  try {
+    url = new URL(trimmed);
+  } catch {
+    return undefined;
+  }
+
+  let path = url.pathname.replace(/\/+$/, "");
+  path = path.replace(/\/(chat\/completions|completions|responses|embeddings)$/, "");
+  if (!/\/v\d+$/.test(path)) path = `${path}/v1`;
+
+  return `${url.origin}${path.replace(/\/{2,}/g, "/")}`;
+}
+
+function getModel() {
+  return process.env.AI_MODEL?.trim() || DEFAULT_MODEL;
+}
+
 function getOpenAIClient() {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return null;
-  return new OpenAI({ apiKey });
+  const baseURL = normalizeBaseUrl(process.env.BASE_URL ?? process.env.OPENAI_BASE_URL);
+  return new OpenAI(baseURL ? { apiKey, baseURL } : { apiKey });
 }
 
 http.route({
@@ -62,7 +89,7 @@ http.route({
       }
 
       const response = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
+        model: getModel(),
         messages: [
           {
             role: "user",
@@ -119,7 +146,7 @@ http.route({
         : `data:image/jpeg;base64,${base64Image}`;
 
       const response = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
+        model: getModel(),
         messages: [
           {
             role: "user",
@@ -175,7 +202,7 @@ http.route({
       if (customPrompt) systemInstruction += ` Additional: ${customPrompt}`;
 
       const response = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
+        model: getModel(),
         messages: [
           { role: "system", content: systemInstruction },
           { role: "user", content: inputText },
@@ -215,7 +242,7 @@ http.route({
       }
 
       const response = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
+        model: getModel(),
         messages: [
           {
             role: "user",

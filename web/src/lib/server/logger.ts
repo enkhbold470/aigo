@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { getModel, rateFor } from './aiConfig';
 
 export type RizzLogRecord = {
 	id: string;
@@ -31,10 +32,7 @@ export type AnalyticsSummary = {
 	totalCostUSD: number;
 	monthlyCostUSD: number;
 	thisMonthGenerations: number;
-	marketRates: {
-		'gpt-4o-mini': { inputPer1M: number; outputPer1M: number };
-		'gpt-4o': { inputPer1M: number; outputPer1M: number };
-	};
+	marketRates: Record<string, { inputPer1M: number; outputPer1M: number }>;
 };
 
 const LOG_DIR = path.resolve(process.cwd(), 'data/logs');
@@ -153,9 +151,23 @@ export function getAnalyticsSummary(): AnalyticsSummary {
 		totalCostUSD,
 		monthlyCostUSD,
 		thisMonthGenerations,
-		marketRates: {
-			'gpt-4o-mini': { inputPer1M: 0.15, outputPer1M: 0.60 },
-			'gpt-4o': { inputPer1M: 2.50, outputPer1M: 10.00 }
-		}
+		marketRates: buildMarketRates(logs)
 	};
+}
+
+/** Rates for the models actually seen in logs, plus the configured default. */
+function buildMarketRates(
+	logs: RizzLogRecord[]
+): Record<string, { inputPer1M: number; outputPer1M: number }> {
+	const models = new Set<string>([getModel()]);
+	for (const log of logs) {
+		if (log.usage?.model) models.add(log.usage.model);
+	}
+
+	const rates: Record<string, { inputPer1M: number; outputPer1M: number }> = {};
+	for (const model of models) {
+		const { input, output } = rateFor(model);
+		rates[model] = { inputPer1M: input, outputPer1M: output };
+	}
+	return rates;
 }
