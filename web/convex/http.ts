@@ -20,6 +20,7 @@ function options() {
 }
 
 const DEFAULT_MODEL = "google/gemini-3-5-flash-lite";
+const OPENAI_FALLBACK_MODEL = "gpt-4o-mini";
 
 // The OpenAI SDK appends the endpoint path itself, so collapse BASE_URL to the
 // API root whether it is given as a bare host, a /v1 root, or a full endpoint.
@@ -41,8 +42,29 @@ function normalizeBaseUrl(raw: string | undefined): string | undefined {
   return `${url.origin}${path.replace(/\/{2,}/g, "/")}`;
 }
 
+function isOpenAIHost(baseUrl?: string): boolean {
+  if (!baseUrl) return true;
+  try {
+    const host = new URL(baseUrl).hostname;
+    return host === "api.openai.com" || host.endsWith(".openai.com");
+  } catch {
+    return false;
+  }
+}
+
+function resolveModelForGateway(model: string, baseUrl?: string): string {
+  const requested = model.trim();
+  if (!requested) return isOpenAIHost(baseUrl) ? OPENAI_FALLBACK_MODEL : DEFAULT_MODEL;
+  if (!isOpenAIHost(baseUrl)) return requested;
+  if (requested.includes("/") || /gemini|claude|grok|llama|mistral/i.test(requested)) {
+    return OPENAI_FALLBACK_MODEL;
+  }
+  return requested;
+}
+
 function getModel() {
-  return process.env.AI_MODEL?.trim() || DEFAULT_MODEL;
+  const baseURL = normalizeBaseUrl(process.env.BASE_URL ?? process.env.OPENAI_BASE_URL);
+  return resolveModelForGateway(process.env.AI_MODEL?.trim() || DEFAULT_MODEL, baseURL);
 }
 
 function getOpenAIClient() {

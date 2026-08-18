@@ -2,6 +2,33 @@ import OpenAI from 'openai';
 import { env } from '$env/dynamic/private';
 
 export const DEFAULT_MODEL = 'google/gemini-3-5-flash-lite';
+export const OPENAI_FALLBACK_MODEL = 'gpt-4o-mini';
+
+/** True when the SDK will talk to api.openai.com (unset BASE_URL uses that default). */
+export function isOpenAIHost(baseUrl?: string): boolean {
+	if (!baseUrl) return true;
+	try {
+		const host = new URL(baseUrl).hostname;
+		return host === 'api.openai.com' || host.endsWith('.openai.com');
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * OpenAI rejects provider-prefixed ids (`google/gemini-...`) with
+ * `400 invalid model ID`. Gateways like Arkor accept them. Map the
+ * incompatible ones onto a vision-capable OpenAI default.
+ */
+export function resolveModelForGateway(model: string, baseUrl?: string): string {
+	const requested = model.trim();
+	if (!requested) return isOpenAIHost(baseUrl) ? OPENAI_FALLBACK_MODEL : DEFAULT_MODEL;
+	if (!isOpenAIHost(baseUrl)) return requested;
+	if (requested.includes('/') || /gemini|claude|grok|llama|mistral/i.test(requested)) {
+		return OPENAI_FALLBACK_MODEL;
+	}
+	return requested;
+}
 
 /**
  * The OpenAI SDK appends `/chat/completions` itself, so BASE_URL must point at
@@ -37,12 +64,14 @@ export function getBaseUrl(): string | undefined {
 }
 
 export function getModel(): string {
-	return env.AI_MODEL?.trim() || DEFAULT_MODEL;
+	return resolveModelForGateway(env.AI_MODEL?.trim() || DEFAULT_MODEL, getBaseUrl());
 }
 
 /** Model used for image/vision requests; falls back to the primary model. */
 export function getVisionModel(): string {
-	return env.AI_VISION_MODEL?.trim() || getModel();
+	const requested = env.AI_VISION_MODEL?.trim();
+	if (requested) return resolveModelForGateway(requested, getBaseUrl());
+	return getModel();
 }
 
 export function createClient(): OpenAI | null {
