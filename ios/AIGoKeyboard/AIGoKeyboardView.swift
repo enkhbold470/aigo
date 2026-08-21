@@ -7,11 +7,20 @@ struct AIGoKeyboardView: View {
     @State private var rizzItems: [RizzItem] = []
     @State private var isGenerating = false
     @State private var clipboardImage: UIImage?
+    @State private var errorMessage: String?
+    @State private var showError = false
 
     var body: some View {
         VStack(spacing: 0) {
             if !session.hasFullAccess {
                 fullAccessBanner
+            }
+
+            // Error Toast
+            if showError, let errorMessage {
+                errorToast(message: errorMessage)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showError)
             }
 
             // Main Content Area
@@ -33,6 +42,20 @@ struct AIGoKeyboardView: View {
         }
         .background(Color(UIColor.systemGray5)) // Exact Apple iOS keyboard background color
         .onAppear(perform: bootstrap)
+    }
+
+    // MARK: – Error Toast
+    private func errorToast(message: String) -> some View {
+        Text(message)
+            .font(.system(size: 12, weight: .medium, design: .default))
+            .foregroundColor(.white)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity)
+            .background(Color.red.opacity(0.9))
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .padding(.horizontal, 14)
+            .padding(.top, 4)
     }
 
     // MARK: – Full Access Banner
@@ -64,11 +87,11 @@ struct AIGoKeyboardView: View {
             }
 
             VStack(spacing: 4) {
-                Text("Take a screenshot")
+                Text("Copy a screenshot")
                     .font(.system(size: 17, weight: .bold, design: .default))
                     .foregroundColor(.primary)
 
-                Text("So AIGo knows what's on your screen")
+                Text("Then tap rizz — AIGo reads your clipboard")
                     .font(.system(size: 13, weight: .regular, design: .default))
                     .foregroundColor(.secondary)
             }
@@ -147,9 +170,23 @@ struct AIGoKeyboardView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    // MARK: – Bottom Action Control Row (re-rizz + Backspace)
+    // MARK: – Bottom Action Control Row (re-rizz + Globe + Backspace)
     private var bottomControlRow: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 8) {
+            // Globe / Next Keyboard Button (leftmost)
+            Button {
+                session.nextKeyboard()
+            } label: {
+                Image(systemName: "globe")
+                    .font(.system(size: 20, weight: .medium, design: .default))
+                    .foregroundColor(.primary)
+                    .frame(width: 44, height: 44)
+                    .background(Color(UIColor.systemGray4))
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Next Keyboard")
+
             // Main Action Button: "re-rizz"
             Button {
                 generateRizz()
@@ -205,14 +242,8 @@ struct AIGoKeyboardView: View {
             completion?()
             return
         }
-
-        // 2. Fall back to Photos library latest screenshot/photo
-        PhotoLibraryMonitor.shared.fetchLatestPhoto { photo, _ in
-            if let photo {
-                self.clipboardImage = photo
-            }
-            completion?()
-        }
+        // No fallback to Photos; clipboard image is required
+        completion?()
     }
 
     private func generateRizz() {
@@ -224,10 +255,12 @@ struct AIGoKeyboardView: View {
         }
 
         guard let validBase64 = imageBase64 else {
+            showErrorMessage("No screenshot in clipboard. Copy a screenshot first.")
             return
         }
 
         isGenerating = true
+        errorMessage = nil
 
         // Pure screenshot mode (no copy text requirement)
         AIAPIClient.shared.generateRizz(
@@ -236,12 +269,41 @@ struct AIGoKeyboardView: View {
         ) { result in
             DispatchQueue.main.async {
                 isGenerating = false
-                if case .success(let items) = result {
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                        rizzItems = items
+                switch result {
+                case .success(let items):
+                    // Filter out canned fallback lines - only show if we got real AI responses
+                    let realItems = items.filter { item in
+                        !Self.isCannedFallback(item.text)
                     }
+                    if realItems.isEmpty {
+                        showErrorMessage("AI returned fallback. Check connection.")
+                    } else {
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                            rizzItems = realItems
+                        }
+                    }
+                case .failure(let error):
+                    showErrorMessage("Failed: \(error.localizedDescription)")
                 }
             }
+        }
+    }
+
+    private static func isCannedFallback(_ text: String) -> Bool {
+        let fallbacks = [
+            "there's only one way to find out",
+            "i do, but you're gonna have to convince me you're worth my effort",
+            "i'd love to show you just how well i can"
+        ]
+        return fallbacks.contains(text.lowercased())
+    }
+
+    private func showErrorMessage(_ message: String) {
+        errorMessage = message
+        showError = true
+        // Auto-dismiss after 3 seconds
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+            showError = false
         }
     }
 }

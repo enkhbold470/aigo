@@ -6,12 +6,46 @@ struct RizzResponsePayload: Decodable {
     let options: [String]?
 }
 
+struct HealthResponse: Decodable {
+    let status: String
+    let service: String?
+    let openai: Bool?
+}
+
 public final class AIAPIClient {
     public static let shared = AIAPIClient()
     private init() {}
 
     private var baseURL: String {
         AppGroupManager.shared.apiBaseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+    }
+
+    /// Check if the AI backend is healthy
+    public func checkHealth(completion: @escaping (Bool) -> Void) {
+        guard let url = URL(string: baseURL + "/api/health") else {
+            completion(false)
+            return
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 8
+
+        URLSession.shared.dataTask(with: request) { data, _, error in
+            DispatchQueue.main.async {
+                if let error = error {
+                    print("[AIAPIClient] Health check failed: \(error)")
+                    completion(false)
+                    return
+                }
+                guard let data = data,
+                      let health = try? JSONDecoder().decode(HealthResponse.self, from: data),
+                      health.status == "ok" else {
+                    completion(false)
+                    return
+                }
+                completion(true)
+            }
+        }.resume()
     }
 
     public func transformText(

@@ -1,5 +1,6 @@
 import Combine
 import UIKit
+import AudioToolbox
 
 final class KeyboardSession: ObservableObject {
     weak var inputVC: UIInputViewController?
@@ -17,18 +18,23 @@ final class KeyboardSession: ObservableObject {
     var needsGlobe: Bool { true }
 
     func insert(_ text: String) {
+        playHaptic(.light)
         playClick()
         proxy?.insertText(text)
     }
 
     func deleteBackward() {
+        playHaptic(.light)
         playClick()
         proxy?.deleteBackward()
     }
 
     func newline() { insert("\n") }
 
-    func nextKeyboard() { inputVC?.advanceToNextInputMode() }
+    func nextKeyboard() {
+        playHaptic(.medium)
+        inputVC?.advanceToNextInputMode()
+    }
 
     /// Open a URL from the keyboard extension (e.g. aigo://camera).
     /// Returns true if the URL was dispatched.
@@ -58,4 +64,10 @@ final class KeyboardSession: ObservableObject {
     }
 
     private func playClick() { UIDevice.current.playInputClick() }
+
+    private func playHaptic(_ style: UIImpactFeedbackGenerator.FeedbackStyle) {
+        let generator = UIImpactFeedbackGenerator(style: style)
+        generator.prepare()
+        generator.impactOccurred()
+    }
 }
